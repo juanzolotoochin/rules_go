@@ -376,3 +376,26 @@ go_deps.archive_override(
 
 -   Fetching dependencies from Git repositories
 -   `go.mod` `exclude` directices
+
+## Limiting execution-platform toolchain registrations
+
+By default, the `go_sdk` extension declares all requested SDK execution
+platforms. Large graphs with many configurations can spend substantial analysis
+memory on candidates that cannot execute on any available executor.
+
+To opt into filtering, set a comma-separated list of remote executor platforms:
+
+```text
+--repo_env=RULES_GO_TOOLCHAIN_EXEC_PLATFORMS=linux_amd64
+```
+
+The host platform is always retained as well, including macOS or ARM hosts that
+use local tools alongside remote execution. This filters SDK execution platforms,
+not Go cross-compilation targets: all SDK versions, target platforms, registration
+names, and priorities for retained executors remain unchanged. SDK repositories
+are still declared, so existing repository references continue to work.
+
+An unset or empty value preserves unfiltered behavior. Invalid platform names
+fail early. The extension tracks the environment and host, and passes both the
+normalized allowlist and explicit host identity into the generated repository's
+attributes, so repository-content caching accounts for changes to either.

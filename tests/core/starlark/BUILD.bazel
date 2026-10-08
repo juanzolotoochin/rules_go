@@ -3,6 +3,7 @@ load(":context_tests.bzl", "context_test_suite")
 load(":module_info_tests.bzl", "module_info_test_suite")
 load(":provider_tests.bzl", "provider_test_suite")
 load(":sdk_tests.bzl", "sdk_test_suite")
+load(":toolchain_exec_platform_tests.bzl", "toolchain_exec_platform_test_suite")
 
 common_test_suite()
 
@@ -13,3 +14,5 @@ module_info_test_suite()
 provider_test_suite()
 
 sdk_test_suite()
+
+toolchain_exec_platform_test_suite()

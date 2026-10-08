@@ -190,14 +190,36 @@ def _get_patch_args(patch_strip):
         return ["-p{}".format(patch_strip)]
     return []
 
-def go_toolchains_single_definition(ctx, *, prefix, goos, goarch, sdk_repo, sdk_type, sdk_version):
+def go_toolchain_exec_platforms(requested, host_platform):
+    """Returns an opt-in execution-platform allowlist, always retaining the host."""
+    if not requested.strip():
+        return []
+
+    platforms = {host_platform: True}
+    for value in requested.split(","):
+        platform = value.strip()
+        goos, separator, goarch = platform.partition("_")
+        if not separator or goos not in GOOS_CONSTRAINTS or goarch not in GOARCH_CONSTRAINTS:
+            fail("invalid RULES_GO_TOOLCHAIN_EXEC_PLATFORMS entry {}; expected GOOS_GOARCH".format(repr(platform)))
+        platforms[platform] = True
+    return sorted(platforms.keys())
+
+def go_toolchains_single_definition(ctx, *, prefix, goos, goarch, sdk_repo, sdk_type, sdk_version, exec_platforms = [], host_platform = ""):
     if not goos and not goarch:
-        goos, goarch = detect_host_platform(ctx)
+        if host_platform:
+            goos, _, goarch = host_platform.partition("_")
+        else:
+            goos, goarch = detect_host_platform(ctx)
     else:
         if not goos:
             fail("goarch set but goos not set")
         if not goarch:
             fail("goos set but goarch not set")
+
+    # Filter the SDK's execution platform, not the Go cross-compilation targets.
+    # Skip version loads as well as declarations for unusable SDK candidates.
+    if exec_platforms and goos + "_" + goarch not in exec_platforms:
+        return struct(loads = [], chunks = [])
 
     chunks = []
     loads = []
@@ -255,7 +277,9 @@ def go_toolchains_build_file_content(
         goarchs,
         sdk_repos,
         sdk_types,
-        sdk_versions):
+        sdk_versions,
+        exec_platforms = [],
+        host_platform = ""):
     if not _have_same_length(prefixes, geese, goarchs, sdk_repos, sdk_types, sdk_versions):
         fail("all lists must have the same length")
 
@@ -275,6 +299,8 @@ def go_toolchains_build_file_content(
             sdk_repo = sdk_repos[i],
             sdk_type = sdk_types[i],
             sdk_version = sdk_versions[i],
+            exec_platforms = exec_platforms,
+            host_platform = host_platform,
         )
         loads.extend(definition.loads)
         chunks.extend(definition.chunks)
@@ -292,6 +318,8 @@ def _go_multiple_toolchains_impl(ctx):
             sdk_repos = ctx.attr.sdk_repos,
             sdk_types = ctx.attr.sdk_types,
             sdk_versions = ctx.attr.sdk_versions,
+            exec_platforms = ctx.attr.exec_platforms,
+            host_platform = ctx.attr.host_platform,
         ),
         executable = False,
     )
@@ -299,6 +327,12 @@ def _go_multiple_toolchains_impl(ctx):
 go_multiple_toolchains = repository_rule(
     implementation = _go_multiple_toolchains_impl,
     attrs = {
+        "exec_platforms": attr.string_list(
+            doc = "SDK execution platforms to declare; empty keeps all. Does not filter target platforms.",
+        ),
+        "host_platform": attr.string(
+            doc = "Explicit Bzlmod host for host SDK declarations and repository-content cache identity.",
+        ),
         "prefixes": attr.string_list(mandatory = True),
         "sdk_repos": attr.string_list(mandatory = True),
         "sdk_types": attr.string_list(mandatory = True),

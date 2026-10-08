@@ -15,7 +15,7 @@
 load("@io_bazel_rules_go_bazel_features//:features.bzl", "bazel_features")
 load("//go/private:go_mod.bzl", "version_from_go_mod", "version_from_go_work")
 load("//go/private:nogo.bzl", "DEFAULT_NOGO", "NOGO_DEFAULT_EXCLUDES", "NOGO_DEFAULT_INCLUDES", "go_register_nogo")
-load("//go/private:sdk.bzl", "detect_host_platform", "fetch_sdks_by_version", "go_download_sdk_rule", "go_host_sdk_rule", "go_multiple_toolchains", "go_wrap_sdk_rule")
+load("//go/private:sdk.bzl", "detect_host_platform", "fetch_sdks_by_version", "go_download_sdk_rule", "go_host_sdk_rule", "go_multiple_toolchains", "go_toolchain_exec_platforms", "go_wrap_sdk_rule")
 
 def host_compatible_toolchain_impl(ctx):
     ctx.file("BUILD.bazel")
@@ -410,6 +410,14 @@ def _go_sdk_impl(ctx):
     # were registered using register_toolchains in their MODULE.bazel files.
     go_multiple_toolchains(
         name = "go_toolchains",
+        # The extension already tracks host OS/architecture. Pass the resolved
+        # policy as an attribute so the repository-contents cache tracks it too.
+        exec_platforms = go_toolchain_exec_platforms(
+            ctx.getenv("RULES_GO_TOOLCHAIN_EXEC_PLATFORMS", ""),
+            "_".join(detect_host_platform(ctx)),
+        ),
+        # Keep the host distinct even when two hosts share the same allowlist.
+        host_platform = "_".join(detect_host_platform(ctx)),
         prefixes = [
             _toolchain_prefix(index, toolchain.sdk_repo)
             for index, toolchain in enumerate(toolchains)
@@ -504,6 +512,7 @@ go_sdk_extra_kwargs = {
 
 go_sdk = module_extension(
     implementation = _go_sdk_impl,
+    environ = ["RULES_GO_TOOLCHAIN_EXEC_PLATFORMS"],
     tag_classes = {
         "download": _download_tag,
         "host": _host_tag,
